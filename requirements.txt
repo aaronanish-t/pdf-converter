@@ -1,0 +1,9 @@
+flask
+pymupdf
+pdf2docx
+pillow
+pillow-heif
+mammoth
+markdown
+openpyxl
+pywin32; sys_platform == "win32"
