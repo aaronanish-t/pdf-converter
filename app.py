@@ -9,6 +9,8 @@ from flask import Flask, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
 import converters as cv
+import image_tools
+import pdf_tools
 from office import APPS as OFFICE_EXTS, office_available
 
 app = Flask(__name__, static_folder="static", static_url_path="")
@@ -41,6 +43,16 @@ def _require(srcs, allowed, what):
     bad = sorted({_ext(s) for s in srcs} - set(allowed))
     if bad:
         raise BadRequest(f"{what} doesn't accept {', '.join(bad)} files.")
+
+
+def _as_pdf(src, out_dir):
+    """Convert any supported file to PDF (used so merge accepts images/documents too)."""
+    ext = _ext(src)
+    if ext == ".pdf":
+        return src
+    if ext in cv.IMAGE_EXTS:
+        return cv.images_to_pdf([src], out_dir)
+    return TO_PDF[ext](src, out_dir)
 
 
 def run(handler, label):
@@ -82,7 +94,7 @@ def run(handler, label):
         resp.headers["X-Result-Size"] = str(len(data))
         resp.headers["Access-Control-Expose-Headers"] = "X-Original-Size, X-Result-Size, Content-Disposition"
         return resp
-    except (BadRequest, ValueError) as e:
+    except (BadRequest, pdf_tools.UserError, ValueError) as e:
         return jsonify(error=str(e)), 400
     except Exception as e:
         app.logger.exception("operation failed")
@@ -126,6 +138,68 @@ def convert():
 
     return run(handler, "converted")
 
+
+@app.post("/api/merge")
+def merge():
+    def handler(srcs, out_dir, opts):
+        if len(srcs) < 2:
+            raise BadRequest("Add at least two files to merge.")
+        _require(srcs, {".pdf"} | set(TO_PDF) | cv.IMAGE_EXTS, "Merge")
+        conv_dir = os.path.join(out_dir, "conv")
+        os.makedirs(conv_dir)
+        return [pdf_tools.merge([_as_pdf(s, conv_dir) for s in srcs], out_dir, opts.get("bookmarks", True))]
+
+    return run(handler, "merged")
+
+
+@app.post("/api/split")
+def split():
+    def handler(srcs, out_dir, opts):
+        _require(srcs, {".pdf"}, "Split")
+        return [p for s in srcs for p in pdf_tools.split(s, out_dir, opts.get("mode", "each"),
+                                                         opts.get("ranges", ""), opts.get("every", 1))]
+
+    return run(handler, "split")
+
+
+@app.post("/api/edit")
+def edit():
+    def handler(srcs, out_dir, opts):
+        _require(srcs, {".pdf"}, "Edit PDF")
+        return [pdf_tools.edit(s, out_dir, opts) for s in srcs]
+
+    return run(handler, "edited")
+
+
+@app.post("/api/compress")
+def compress():
+    def handler(srcs, out_dir, opts):
+        _require(srcs, {".pdf"} | cv.IMAGE_EXTS, "Compress")
+        level = opts.get("level", "medium")
+        return [pdf_tools.compress(s, out_dir, level, opts.get("grayscale")) if _ext(s) == ".pdf"
+                else image_tools.compress(s, out_dir, level, opts.get("target_kb"), opts.get("max_dim"),
+                                          opts.get("format", "keep"))
+                for s in srcs]
+
+    return run(handler, "compressed")
+
+
+@app.post("/api/resize")
+def resize():
+    def handler(srcs, out_dir, opts):
+        _require(srcs, cv.IMAGE_EXTS, "Resize")
+        return [image_tools.resize(s, out_dir, **opts) for s in srcs]
+
+    return run(handler, "resized")
+
+
+@app.post("/api/enhance")
+def enhance():
+    def handler(srcs, out_dir, opts):
+        _require(srcs, cv.IMAGE_EXTS, "Enhance")
+        return [image_tools.enhance(s, out_dir, **opts) for s in srcs]
+
+    return run(handler, "enhanced")
 
 
 if __name__ == "__main__":
