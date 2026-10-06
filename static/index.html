@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Toolkit</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7280; --border: #e2e5ea; --field: #fff;
+    --accent: #d93a3a; --accent-soft: #fdecec; --ok: #1f8a4c; --err: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161b; --card: #1d2027; --text: #e7e9ee; --muted: #9aa1ad; --border: #2e323b; --field: #16181d;
+            --accent: #ef5a5a; --accent-soft: #3a2224; --ok: #4cc283; --err: #ff6b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 36px 16px 60px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 22px; }
+
+  .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  @media (max-width: 640px) { .tools { grid-template-columns: repeat(2, 1fr); } }
+  .tools button { text-align: left; border: 1px solid var(--border); background: var(--card); color: var(--text);
+                  border-radius: 12px; padding: 11px 12px; font: inherit; cursor: pointer; transition: .12s; }
+  .tools button:hover { border-color: var(--accent); }
+  .tools button.active { border-color: var(--accent); background: var(--accent-soft); }
+  .tools b { display: block; font-size: 14px; }
+  .tools small { color: var(--muted); font-size: 12px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .drop { border: 2px dashed var(--border); border-radius: 12px; padding: 30px 16px; text-align: center;
+          cursor: pointer; transition: .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { display: block; font-size: 16px; margin-bottom: 2px; }
+  .drop small { color: var(--muted); }
+
+  ul.files { list-style: none; padding: 0; margin: 12px 0 0; }
+  ul.files li { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border);
+                border-radius: 8px; margin-top: 6px; background: var(--card); }
+  ul.files li.dragging { opacity: .4; }
+  ul.files .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ul.files small { color: var(--muted); flex-shrink: 0; }
+  ul.files button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 2px 5px; }
+  ul.files button:hover { color: var(--text); }
+  .num { color: var(--muted); font-size: 12px; width: 18px; text-align: right; }
+  .order { display: none; }
+  .reorder .order { display: inline; }
+  .reorder li { cursor: grab; }
+
+  .panel { display: none; margin-top: 18px; }
+  .panel.active { display: block; }
+  fieldset { border: 1px solid var(--border); border-radius: 10px; margin: 12px 0 0; padding: 12px 14px 14px; }
+  legend { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 0 6px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  label.f input, label.f select { font: inherit; color: var(--text); background: var(--field); border: 1px solid var(--border);
+                                  border-radius: 8px; padding: 7px 9px; width: 100%; }
+  label.f input[type=range] { padding: 0; border: 0; accent-color: var(--accent); }
+  label.f input[type=color] { padding: 2px; height: 36px; }
+  label.check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  label.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .out { color: var(--text); font-weight: 600; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips label { cursor: pointer; }
+  .chips input { display: none; }
+  .chips span { display: inline-block; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+                font-size: 13px; font-weight: 600; }
+  .chips input:checked + span { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .lbl { font-size: 12px; font-weight: 700; color: var(--muted); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .05em; }
+  .lbl:first-child { margin-top: 0; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+  .go { width: 100%; margin-top: 20px; padding: 12px; border: 0; border-radius: 10px; background: var(--accent);
+        color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  .go:disabled { opacity: .5; cursor: not-allowed; }
+  .status { margin-top: 14px; min-height: 22px; font-size: 14px; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+</style>
+</head>
+<body>
+<main>
+  <h1>PDF Toolkit</h1>
+  <p class="sub">Convert, merge, split, edit and compress PDFs, and resize or enhance images. Everything runs on your machine.</p>
+
+  <div class="tools" id="tools"></div>
+
+  <div class="card">
+    <div class="drop" id="drop">
+      <strong id="dropTitle"></strong>
+      <small id="dropHint"></small>
+      <input type="file" id="picker" multiple hidden>
+    </div>
+    <ul class="files" id="list"></ul>
+
+    <!-- PDF -> other -->
+    <form class="panel" onsubmit="return false" data-tool="from">
+      <div class="lbl">Documents</div>
+      <div class="chips" id="docTargets"></div>
+      <div class="lbl">Images</div>
+      <div class="chips" id="imgTargets"></div>
+      <fieldset id="dpiBox"><legend>Image quality</legend>
+        <div class="grid">
+          <label class="f">Resolution
+            <select name="dpi"><option value="72">72 DPI · small</option><option value="150" selected>150 DPI · standard</option>
+              <option value="300">300 DPI · print</option><option value="600">600 DPI · max</option></select></label>
+        </div>
+        <p class="hint">Multi-page PDFs export one image per page, bundled as a .zip.</p>
+      </fieldset>
+    </form>
+
+    <!-- other -> PDF -->
+    <form class="panel" onsubmit="return false" data-tool="to">
+      <fieldset><legend>Page setup</legend>
+        <div class="grid">
+          <label class="f">Page size
+            <select name="page_size"><option value="fit">Fit to image (images only)</option><option value="a4" selected>A4</option>
+              <option value="letter">Letter</option><option value="legal">Legal</option><option value="a3">A3</option><option value="a5">A5</option></select></label>
+          <label class="f">Orientation
+            <select name="orientation"><option value="auto">Auto</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+          <label class="f">Margins
+            <select name="margin"><option value="none">None</option><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></label>
+        </div>
+        <p class="hint">Multiple images become one PDF. Word / Excel / PowerPoint keep their own page layout.</p>
+      </fieldset>
+    </form>
+
+    <!-- merge -->
+    <form class="panel" onsubmit="return false" data-tool="merge">
+      <fieldset><legend>Options</legend>
+        <label class="check"><input type="checkbox" name="bookmarks" checked> Add a bookmark for each file</label>
+        <p class="hint">Drag files (or use ↑ ↓) to set the order. Images and documents are converted to PDF first.</p>
+      </fieldset>
+    </form>
+
+    <!-- split -->
+    <form class="panel" onsubmit="return false" data-tool="split">
+      <fieldset><legend>Split mode</legend>
+        <div class="chips">
+          <label><input type="radio" name="mode" value="each" checked><span>Every page</span></label>
+          <label><input type="radio" name="mode" value="ranges"><span>Custom ranges</span></label>
+          <label><input type="radio" name="mode" value="every"><span>Every N pages</span></label>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <label class="f" data-show="mode=ranges">Ranges (one PDF each)<input name="ranges" placeholder="1-3, 4-6, 7-end"></label>
+          <label class="f" data-show="mode=every">Pages per file<input name="every" type="number" min="1" value="2"></label>
+        </div>
+      </fieldset>
+    </form>
+
+    <!-- edit -->
+    <form class="panel" onsubmit="return false" data-tool="edit">
+      <fieldset><legend>Pages</legend>
+        <div class="grid">
+          <label class="f">Keep / reorder<input name="page_order" placeholder="e.g. 3, 1-2, 5-end"></label>
+          <label class="f">Remove pages<input name="remove_pages" placeholder="e.g. 2, 7-9"></label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Rotate</legend>
+        <div class="grid">
+          <label class="f">Rotation
+            <select name="rotate"><option value="0">None</option><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">90° anti-clockwise</option></select></label>
+          <label class="f">Pages (blank = all)<input name="rotate_pages" placeholder="e.g. 1, 4-6"></label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Watermark</legend>
+        <div class="grid">
+          <label class="f">Text<input name="watermark" placeholder="e.g. CONFIDENTIAL"></label>
+          <label class="f">Colour<input name="wm_color" type="color" value="#d93a3a"></label>
+          <label class="f">Opacity <span class="out" data-for="wm_opacity"></span><input name="wm_opacity" type="range" min="0.05" max="1" step="0.05" value="0.2"></label>
+          <label class="f">Size <span class="out" data-for="wm_size"></span><input name="wm_size" type="range" min="16" max="140" step="2" value="60"></label>
+          <label class="f">Angle <span class="out" data-for="wm_angle"></span><input name="wm_angle" type="range" min="-90" max="90" step="5" value="45"></label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Page numbers</legend>
+        <label class="check"><input type="checkbox" name="page_numbers"> Add page numbers</label>
+        <div class="grid" style="margin-top:10px" data-show="page_numbers">
+          <label class="f">Position
+            <select name="number_position"><option value="bottom-center">Bottom centre</option><option value="bottom-right">Bottom right</option>
+              <option value="bottom-left">Bottom left</option><option value="top-center">Top centre</option><option value="top-right">Top right</option><option value="top-left">Top left</option></select></label>
+          <label class="f">Format
+            <select name="number_format"><option value="{n}">1</option><option value="Page {n}">Page 1</option><option value="Page {n} of {total}">Page 1 of 9</option><option value="{n} / {total}">1 / 9</option><option value="- {n} -">- 1 -</option></select></label>
+          <label class="f">Start at<input name="number_start" type="number" min="0" value="1"></label>
+          <label class="f">Font size<input name="number_size" type="number" min="6" max="36" value="10"></label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Security</legend>
+        <div class="grid">
+          <label class="f">Current password (if locked)<input name="current_password" type="password" autocomplete="off"></label>
+          <label class="f">Set new password<input name="new_password" type="password" autocomplete="new-password" placeholder="leave blank for none"></label>
+        </div>
+        <p class="hint">To remove a password: enter the current one and leave "new password" blank.</p>
+      </fieldset>
+      <fieldset><legend>Document info &amp; size</legend>
+        <div class="grid">
+          <label class="f">Title<input name="title"></label>
+          <label class="f">Author<input name="author"></label>
+          <label class="f">Subject<input name="subject"></label>
+          <label class="f">Keywords<input name="keywords"></label>
+          <label class="f">Compress
+            <select name="compress"><option value="none">No</option><option value="low">Light</option><option value="medium">Medium</option><option value="high">Strong</option></select></label>
+        </div>
+      </fieldset>
+    </form>
+
+    <!-- compress -->
+    <form class="panel" onsubmit="return false" data-tool="compress">
+      <fieldset><legend>Compression</legend>
+        <div class="chips">
+          <label><input type="radio" name="level" value="low"><span>Light · best quality</span></label>
+          <label><input type="radio" name="level" value="medium" checked><span>Balanced</span></label>
+          <label><input type="radio" name="level" value="high"><span>Strong · smallest</span></label>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <label class="f">Target size in KB (images)<input name="target_kb" type="number" min="5" placeholder="optional, e.g. 200"></label>
+          <label class="f">Max width/height px (images)<input name="max_dim" type="number" min="16" placeholder="optional, e.g. 1920"></label>
+          <label class="f">Image format
+            <select name="format"><option value="keep">Keep original</option><option value="jpg">JPG</option><option value="webp">WEBP (smaller)</option><option value="avif">AVIF (smallest)</option><option value="png">PNG</option></select></label>
+        </div>
+        <label class="check" style="margin-top:12px"><input type="checkbox" name="grayscale"> Convert PDF images to grayscale</label>
+        <p class="hint">Works on PDFs and images. If a file can't get any smaller, you get the original back.</p>
+      </fieldset>
+    </form>
+
+    <!-- resize -->
+    <form class="panel" onsubmit="return false" data-tool="resize">
+      <fieldset><legend>Resize by</legend>
+        <div class="chips">
+          <label><input type="radio" name="mode" value="percent" checked><span>Percentage</span></label>
+          <label><input type="radio" name="mode" value="dimensions"><span>Exact size</span></label>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <label class="f" data-show="mode=percent">Scale <span class="out" data-for="percent" data-suffix="%"></span><input name="percent" type="range" min="5" max="400" step="5" value="50"></label>
+          <label class="f" data-show="mode=dimensions">Width (px)<input name="width" type="number" min="1" placeholder="auto"></label>
+          <label class="f" data-show="mode=dimensions">Height (px)<input name="height" type="number" min="1" placeholder="auto"></label>
+          <label class="f" data-show="mode=dimensions">When both are set
+            <select name="fit"><option value="contain">Fit inside (keep ratio)</option><option value="cover">Fill &amp; crop</option><option value="exact">Stretch to exact</option></select></label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Output</legend>
+        <div class="grid">
+          <label class="f">Format<select name="fmt" class="fmtSelect"></select></label>
+          <label class="f">Quality <span class="out" data-for="quality"></span><input name="quality" type="range" min="10" max="100" value="90"></label>
+        </div>
+      </fieldset>
+    </form>
+
+    <!-- enhance -->
+    <form class="panel" onsubmit="return false" data-tool="enhance">
+      <fieldset><legend>Enhance</legend>
+        <div class="grid">
+          <label class="f">Upscale
+            <select name="upscale"><option value="1">Keep size</option><option value="2" selected>2× larger</option><option value="3">3× larger</option><option value="4">4× larger</option></select></label>
+          <label class="f">Sharpen <span class="out" data-for="sharpen"></span><input name="sharpen" type="range" min="0" max="3" step="0.25" value="1"></label>
+          <label class="f">Colour boost <span class="out" data-for="color"></span><input name="color" type="range" min="0.5" max="2" step="0.05" value="1.1"></label>
+          <label class="f">Brightness <span class="out" data-for="brightness"></span><input name="brightness" type="range" min="0.5" max="1.5" step="0.05" value="1"></label>
+        </div>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:12px">
+          <label class="check"><input type="checkbox" name="auto_contrast" checked> Auto contrast</label>
+          <label class="check"><input type="checkbox" name="denoise"> Reduce noise</label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Output</legend>
+        <div class="grid">
+          <label class="f">Format<select name="fmt" class="fmtSelect"></select></label>
+          <label class="f">Quality <span class="out" data-for="quality"></span><input name="quality" type="range" min="10" max="100" value="95"></label>
+        </div>
+        <p class="hint">Uses classic upscaling and sharpening filters. Works best on slightly soft or small images.</p>
+      </fieldset>
+    </form>
+
+    <button class="go" id="go" disabled>Convert</button>
+    <div class="status" id="status"></div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const ext = n => (n.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+const fmtSize = b => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB" : (b / 1048576).toFixed(1) + " MB";
+let F = { to_pdf: [], images: [], image_formats: [] };
+
+const TOOLS = [
+  { id: "from", title: "PDF → Other", desc: "Word, Excel, images…", endpoint: "convert", btn: "Convert",
+    accepts: () => [".pdf"], drop: "Drop PDF files here" },
+  { id: "to", title: "Other → PDF", desc: "Office, images, text…", endpoint: "convert", btn: "Convert to PDF",
+    accepts: () => F.to_pdf, drop: "Drop files to turn into PDF" },
+  { id: "merge", title: "Merge", desc: "Combine into one PDF", endpoint: "merge", btn: "Merge files", reorder: true,
+    accepts: () => [".pdf", ...F.to_pdf], drop: "Drop files to merge (2 or more)" },
+  { id: "split", title: "Split", desc: "Pages or ranges", endpoint: "split", btn: "Split PDF",
+    accepts: () => [".pdf"], drop: "Drop a PDF to split" },
+  { id: "edit", title: "Edit PDF", desc: "Rotate, watermark, lock…", endpoint: "edit", btn: "Apply changes",
+    accepts: () => [".pdf"], drop: "Drop a PDF to customise" },
+  { id: "compress", title: "Compress", desc: "Reduce file size", endpoint: "compress", btn: "Compress",
+    accepts: () => [".pdf", ...F.images], drop: "Drop PDFs or images to shrink" },
+  { id: "resize", title: "Resize images", desc: "By % or pixels", endpoint: "resize", btn: "Resize",
+    accepts: () => F.images, drop: "Drop images to resize" },
+  { id: "enhance", title: "Enhance images", desc: "Upscale & sharpen", endpoint: "enhance", btn: "Enhance",
+    accepts: () => F.images, drop: "Drop images to enhance" },
+];
+let tool = TOOLS[0], files = [];
+
+$("tools").innerHTML = TOOLS.map(t => `<button data-id="${t.id}"><b>${t.title}</b><small>${t.desc}</small></button>`).join("");
+
+function chips(el, items, checked) {
+  el.innerHTML = items.map(([v, t]) =>
+    `<label><input type="radio" name="target" value="${v}" ${v === checked ? "checked" : ""}><span>${t}</span></label>`).join("");
+}
+chips($("docTargets"), [["docx", "Word (DOCX)"], ["xlsx", "Excel (XLSX)"], ["txt", "Text (TXT)"], ["html", "HTML"]], "docx");
+
+fetch("/api/formats").then(r => r.json()).then(f => {
+  F = f;
+  chips($("imgTargets"), [...f.image_formats, "svg"].map(x => [x, x.toUpperCase()]));
+  document.querySelectorAll(".fmtSelect").forEach(s => s.innerHTML =
+    `<option value="keep">Same as original</option>` + f.image_formats.filter(x => x !== "jpeg").map(x => `<option value="${x}">${x.toUpperCase()}</option>`).join(""));
+  selectTool(tool.id);
+});
+
+const panel = () => document.querySelector(`.panel[data-tool="${tool.id}"]`);
+const accepted = f => tool.accepts().includes(ext(f.name));
+
+function selectTool(id) {
+  tool = TOOLS.find(t => t.id === id);
+  document.querySelectorAll("#tools button").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.dataset.tool === id));
+  $("dropTitle").textContent = tool.drop;
+  $("dropHint").textContent = "or click to browse";
+  $("picker").accept = tool.accepts().join(",");
+  $("go").textContent = tool.btn;
+  const before = files.length;
+  files = files.filter(accepted);  // keep files that still make sense for the new tool
+  setStatus(before > files.length ? `Removed ${before - files.length} file(s) this tool can't use.` : "");
+  refreshPanel();
+  render();
+}
+
+function render() {
+  $("list").classList.toggle("reorder", !!tool.reorder);
+  $("list").innerHTML = files.map((f, i) =>
+    `<li draggable="${!!tool.reorder}" data-i="${i}">
+       <span class="num order">${i + 1}</span>
+       <span class="name">${f.name.replace(/</g, "&lt;")}</span><small>${fmtSize(f.size)}</small>
+       <button class="order" data-act="up" title="Move up">↑</button><button class="order" data-act="down" title="Move down">↓</button>
+       <button data-act="rm" title="Remove">×</button></li>`).join("");
+  $("go").disabled = !files.length;
+}
+
+function addFiles(list) {
+  const all = [...list], ok = all.filter(accepted);
+  files.push(...ok);
+  setStatus(ok.length < all.length ? `Skipped ${all.length - ok.length} unsupported file(s).` : "", "err");
+  render();
+}
+function setStatus(msg, cls = "") { $("status").textContent = msg; $("status").className = "status " + cls; }
+
+// show/hide dependent fields and update slider readouts
+function refreshPanel() {
+  const p = panel(); if (!p) return;
+  p.querySelectorAll("[data-show]").forEach(el => {
+    const [name, val] = el.dataset.show.split("=");
+    const input = p.querySelector(`[name="${name}"]:checked, [name="${name}"]:not([type=radio])`);
+    el.style.display = (val ? input?.value === val : input?.checked) ? "" : "none";
+  });
+  p.querySelectorAll(".out").forEach(o => {
+    const v = p.querySelector(`[name="${o.dataset.for}"]`).value;
+    o.textContent = v + (o.dataset.suffix || "");
+  });
+  if (tool.id === "from") {
+    const t = p.querySelector("[name=target]:checked")?.value;
+    $("dpiBox").style.display = F.image_formats.includes(t) ? "" : "none";
+  }
+}
+document.addEventListener("input", e => { if (e.target.closest(".panel")) refreshPanel(); });
+
+function collect() {
+  const opts = {}; let target;
+  panel().querySelectorAll("[name]").forEach(el => {
+    if (el.closest("[data-show]")?.style.display === "none") return;
+    if (el.type === "radio") { if (!el.checked) return; }
+    let v = el.type === "checkbox" ? el.checked : el.value;
+    if (el.type === "number" || el.type === "range") { if (v === "") return; v = Number(v); }
+    if (el.name === "target") target = v; else opts[el.name] = v;
+  });
+  if (tool.id === "to") target = "pdf";
+  return { target, opts };
+}
+
+// --- events
+$("tools").onclick = e => { const b = e.target.closest("button"); if (b) selectTool(b.dataset.id); };
+$("drop").onclick = () => $("picker").click();
+$("picker").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
+["dragenter", "dragover"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.remove("over"); }));
+$("drop").addEventListener("drop", e => addFiles(e.dataTransfer.files));
+
+$("list").onclick = e => {
+  const act = e.target.dataset.act; if (!act) return;
+  const i = +e.target.closest("li").dataset.i;
+  if (act === "rm") files.splice(i, 1);
+  const j = act === "up" ? i - 1 : act === "down" ? i + 1 : -1;
+  if (j >= 0 && j < files.length) [files[i], files[j]] = [files[j], files[i]];
+  render();
+};
+let dragFrom = null;
+$("list").addEventListener("dragstart", e => { dragFrom = +e.target.dataset.i; e.target.classList.add("dragging"); });
+$("list").addEventListener("dragover", e => e.preventDefault());
+$("list").addEventListener("drop", e => {
+  e.preventDefault(); e.stopPropagation();
+  const li = e.target.closest("li"); if (!li || dragFrom === null) return;
+  const [f] = files.splice(dragFrom, 1); files.splice(+li.dataset.i, 0, f); dragFrom = null; render();
+});
+$("list").addEventListener("dragend", () => { dragFrom = null; render(); });
+
+$("go").onclick = async () => {
+  const { target, opts } = collect();
+  const body = new FormData();
+  files.forEach(f => body.append("files", f));
+  if (target) body.append("target", target);
+  body.append("options", JSON.stringify(opts));
+  $("go").disabled = true;
+  setStatus("Working… (large files and Office documents can take a few seconds)");
+  try {
+    const res = await fetch("/api/" + tool.endpoint, { method: "POST", body });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+    const cd = res.headers.get("Content-Disposition") || "";
+    const name = decodeURIComponent(cd.match(/filename\*=UTF-8''([^;]+)/)?.[1] || cd.match(/filename="?([^";]+)/)?.[1] || "download");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    Object.assign(document.createElement("a"), { href: url, download: name }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    let msg = `Done — downloaded ${name}`;
+    const before = +res.headers.get("X-Original-Size"), after = +res.headers.get("X-Result-Size");
+    if (["compress", "resize"].includes(tool.id) && before) {
+      const pct = Math.round((1 - after / before) * 100);
+      msg += ` · ${fmtSize(before)} → ${fmtSize(after)} (${pct >= 0 ? "−" + pct : "+" + -pct}%)`;
+    }
+    setStatus(msg, "ok");
+  } catch (e) {
+    setStatus(e.message, "err");
+  } finally {
+    $("go").disabled = !files.length;
+  }
+};
+</script>
+</body>
+</html>
