@@ -20,7 +20,7 @@
   h1 { font-size: 26px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 22px; }
 
-  .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
   @media (max-width: 640px) { .tools { grid-template-columns: repeat(2, 1fr); } }
   .tools button { text-align: left; border: 1px solid var(--border); background: var(--card); color: var(--text);
                   border-radius: 12px; padding: 11px 12px; font: inherit; cursor: pointer; transition: .12s; }
@@ -83,7 +83,7 @@
 <body>
 <main>
   <h1>PDF Toolkit</h1>
-  <p class="sub">Convert, merge, split, edit and compress PDFs, and resize or enhance images. Everything runs on your machine.</p>
+  <p class="sub">Convert, merge, split, edit, OCR and compress PDFs, and resize or enhance images. Everything runs on your machine.</p>
 
   <div class="tools" id="tools"></div>
 
@@ -205,6 +205,22 @@
       </fieldset>
     </form>
 
+    <!-- ocr -->
+    <form class="panel" onsubmit="return false" data-tool="ocr">
+      <fieldset><legend>Output</legend>
+        <div class="chips">
+          <label><input type="radio" name="output" value="pdf" checked><span>Searchable PDF</span></label>
+          <label><input type="radio" name="output" value="txt"><span>Plain text (TXT)</span></label>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <label class="f">Scan quality
+            <select name="dpi"><option value="150">Fast</option><option value="200" selected>Balanced</option><option value="300">Accurate (small text)</option></select></label>
+        </div>
+        <label class="check" style="margin-top:12px"><input type="checkbox" name="skip_text_pages" checked> Skip pages that already have selectable text</label>
+        <p class="hint">Reads text from scanned PDFs and photos. A searchable PDF looks identical to the original, but you can search, select and copy its text. The first run takes a few extra seconds to load.</p>
+      </fieldset>
+    </form>
+
     <!-- compress -->
     <form class="panel" onsubmit="return false" data-tool="compress">
       <fieldset><legend>Compression</legend>
@@ -293,6 +309,8 @@ const TOOLS = [
     accepts: () => [".pdf"], drop: "Drop a PDF to split" },
   { id: "edit", title: "Edit PDF", desc: "Rotate, watermark, lock…", endpoint: "edit", btn: "Apply changes",
     accepts: () => [".pdf"], drop: "Drop a PDF to customise" },
+  { id: "ocr", title: "OCR", desc: "Text from scans & photos", endpoint: "ocr", btn: "Recognise text",
+    accepts: () => [".pdf", ...F.images], drop: "Drop scanned PDFs or photos" },
   { id: "compress", title: "Compress", desc: "Reduce file size", endpoint: "compress", btn: "Compress",
     accepts: () => [".pdf", ...F.images], drop: "Drop PDFs or images to shrink" },
   { id: "resize", title: "Resize images", desc: "By % or pixels", endpoint: "resize", btn: "Resize",
@@ -308,7 +326,7 @@ function chips(el, items, checked) {
   el.innerHTML = items.map(([v, t]) =>
     `<label><input type="radio" name="target" value="${v}" ${v === checked ? "checked" : ""}><span>${t}</span></label>`).join("");
 }
-chips($("docTargets"), [["docx", "Word (DOCX)"], ["xlsx", "Excel (XLSX)"], ["txt", "Text (TXT)"], ["html", "HTML"]], "docx");
+chips($("docTargets"), [["docx", "Word (DOCX)"], ["xlsx", "Excel (XLSX)"], ["pptx", "PowerPoint (PPTX)"], ["txt", "Text (TXT)"], ["html", "HTML"]], "docx");
 
 fetch("/api/formats").then(r => r.json()).then(f => {
   F = f;
