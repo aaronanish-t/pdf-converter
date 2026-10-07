@@ -95,6 +95,32 @@ def pdf_to_svg(src, out_dir, **_):
     return _zip(pages, os.path.join(out_dir, f"{_stem(src)}_svg.zip"))
 
 
+def pdf_to_pptx(src, out_dir, dpi=150, notes=True, **_):
+    """One slide per page, rendered as an image so it looks identical; page text goes in the speaker notes."""
+    from pptx import Presentation
+    from pptx.util import Emu
+
+    emu = lambda pt: Emu(int(pt * 12700))  # 1 pt = 12700 EMU
+    out = os.path.join(out_dir, _stem(src) + ".pptx")
+    prs = Presentation()
+    with pymupdf.open(src) as doc:
+        first = doc[0].rect
+        prs.slide_width, prs.slide_height = emu(first.width), emu(first.height)
+        for page in doc:
+            slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
+            pix = page.get_pixmap(dpi=int(dpi))
+            # pages of a different shape are fitted and centred
+            r = min(first.width / page.rect.width, first.height / page.rect.height)
+            w, h = page.rect.width * r, page.rect.height * r
+            slide.shapes.add_picture(io.BytesIO(pix.tobytes("png")), emu((first.width - w) / 2),
+                                     emu((first.height - h) / 2), emu(w), emu(h))
+            text = page.get_text().strip()
+            if notes and text:
+                slide.notes_slide.notes_text_frame.text = text
+    prs.save(out)
+    return out
+
+
 def pdf_to_txt(src, out_dir, **_):
     out = os.path.join(out_dir, _stem(src) + ".txt")
     with pymupdf.open(src) as doc, open(out, "w", encoding="utf-8") as f:
