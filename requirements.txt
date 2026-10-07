@@ -6,4 +6,8 @@ pillow-heif==1.8.0
 mammoth==1.13.0
 markdown==3.11
 openpyxl==3.1.5
+python-pptx==1.0.2
+rapidocr==3.9.2
+onnxruntime==1.30.0
+numpy==2.5.3
 pywin32==312; sys_platform == "win32"

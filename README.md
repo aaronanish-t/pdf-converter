@@ -14,7 +14,7 @@ Open http://localhost:5000
 
 ## Supported conversions
 
-**PDF →** DOCX, XLSX (detected tables), TXT, HTML, PNG, JPG/JPEG, WEBP, TIFF, BMP, GIF, AVIF, SVG
+**PDF →** DOCX, XLSX (detected tables), PPTX (one slide per page, text in speaker notes), TXT, HTML, PNG, JPG/JPEG, WEBP, TIFF, BMP, GIF, AVIF, SVG
 (multi-page image exports are zipped, one file per page)
 
 **→ PDF**
@@ -30,6 +30,8 @@ Open http://localhost:5000
 - **Edit** — reorder/remove pages, rotate, text watermark (colour/opacity/size/angle), page numbers,
   set/remove password (AES-256), title/author metadata, compression
 - **Compress** — light/balanced/strong; downsamples images and subsets fonts. Never returns a bigger file.
+- **OCR** — makes scanned PDFs and photos searchable (invisible text layer over the original) or extracts
+  plain text. Uses [RapidOCR](https://github.com/RapidAI/RapidOCR), so no Tesseract install is needed.
 - **Page setup** for →PDF conversions: A3/A4/A5/Letter/Legal, orientation, margins
 
 ## Image tools
@@ -52,3 +54,4 @@ and return the result file (a `.zip` when there are several outputs).
 | `POST /api/compress` | `{"level": "low" \| "medium" \| "high", "target_kb": 200}` |
 | `POST /api/resize` | `{"mode": "percent", "percent": 50}` |
 | `POST /api/enhance` | `{"upscale": 2, "sharpen": 1}` |
+| `POST /api/ocr` | `{"output": "pdf" \| "txt", "dpi": 200, "skip_text_pages": true}` |
