@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 
 import converters as cv
 import image_tools
+import ocr
 import pdf_tools
 from office import APPS as OFFICE_EXTS, office_available
 
@@ -20,6 +21,7 @@ IMAGE_FORMATS = ("png", "jpg", "jpeg", "webp", "tiff", "bmp", "gif", "avif")
 PDF_TARGETS = {
     "docx": cv.pdf_to_docx,
     "xlsx": cv.pdf_to_xlsx,
+    "pptx": cv.pdf_to_pptx,
     **{fmt: (lambda f: lambda s, o, **kw: cv.pdf_to_images(s, o, f, **kw))(fmt) for fmt in IMAGE_FORMATS},
     "svg": cv.pdf_to_svg,
     "txt": cv.pdf_to_txt,
@@ -200,6 +202,16 @@ def enhance():
         return [image_tools.enhance(s, out_dir, **opts) for s in srcs]
 
     return run(handler, "enhanced")
+
+
+@app.post("/api/ocr")
+def run_ocr():
+    def handler(srcs, out_dir, opts):
+        _require(srcs, {".pdf"} | cv.IMAGE_EXTS, "OCR")
+        fn = ocr.extract_text if opts.get("output") == "txt" else ocr.make_searchable
+        return [fn(s, out_dir, **opts) for s in srcs]
+
+    return run(handler, "ocr")
 
 
 if __name__ == "__main__":
