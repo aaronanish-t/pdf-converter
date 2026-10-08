@@ -5,6 +5,7 @@ import re
 import shutil
 import tempfile
 
+import pymupdf
 from flask import Flask, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
@@ -12,6 +13,7 @@ import converters as cv
 import image_tools
 import ocr
 import pdf_tools
+import signing
 from office import APPS as OFFICE_EXTS, office_available
 
 app = Flask(__name__, static_folder="static", static_url_path="")
@@ -118,6 +120,7 @@ def formats():
         "images": sorted(cv.IMAGE_EXTS),
         "image_formats": list(IMAGE_FORMATS),
         "office": office_available(),
+        "fonts": signing.available_fonts(),
     })
 
 
@@ -212,6 +215,62 @@ def run_ocr():
         return [fn(s, out_dir, **opts) for s in srcs]
 
     return run(handler, "ocr")
+
+
+@app.post("/api/extract-images")
+def extract_images():
+    def handler(srcs, out_dir, opts):
+        _require(srcs, {".pdf"}, "Extract images")
+        return [p for s in srcs for p in pdf_tools.extract_images(
+            s, out_dir, opts.get("min_size", 64), opts.get("format", "keep"), opts.get("current_password", ""))]
+
+    return run(handler, "images")
+
+
+@app.post("/api/sign")
+def sign():
+    sig_file = request.files.get("signature")
+
+    def handler(srcs, out_dir, opts):
+        _require(srcs, {".pdf"}, "Sign")
+        if opts.get("mode") == "type":
+            if not (opts.get("text") or "").strip():
+                raise BadRequest("Type your name to create a signature.")
+            sig = signing.typed_signature(opts["text"].strip(), opts.get("font"), opts.get("color"))
+        else:
+            if not sig_file or not sig_file.filename:
+                raise BadRequest("Upload a signature image, or switch to a typed signature.")
+            if _ext(sig_file.filename) not in cv.IMAGE_EXTS:
+                raise BadRequest("The signature must be an image (PNG, JPG…).")
+            sig_path = os.path.join(out_dir, "signature" + _ext(sig_file.filename))
+            sig_file.save(sig_path)
+            sig = signing.image_signature(sig_path, opts.get("remove_background", True),
+                                          opts.get("color") if opts.get("recolor") else None)
+            os.remove(sig_path)
+        return [signing.sign(s, out_dir, sig, opts) for s in srcs]
+
+    return run(handler, "signed")
+
+
+@app.post("/api/preview")
+def preview():
+    """Render one page of an uploaded PDF as PNG (used to place signatures)."""
+    f = request.files.get("file")
+    if not f:
+        return jsonify(error="No file uploaded."), 400
+    try:
+        doc = pymupdf.open(stream=f.read(), filetype="pdf")
+    except Exception:
+        return jsonify(error="Couldn't read that PDF."), 400
+    with doc:
+        if doc.needs_pass and not doc.authenticate(request.form.get("password", "")):
+            return jsonify(error="This PDF is password-protected."), 400
+        page = doc[min(max(int(request.form.get("page", 1)), 1), doc.page_count) - 1]
+        zoom = 700 / max(page.rect.width, 1)  # ~700px wide
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        resp = send_file(io.BytesIO(pix.tobytes("png")), mimetype="image/png")
+        resp.headers["X-Page-Count"] = str(doc.page_count)
+        return resp
 
 
 if __name__ == "__main__":
