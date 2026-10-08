@@ -78,6 +78,16 @@
   .go:disabled { opacity: .5; cursor: not-allowed; }
   .status { margin-top: 14px; min-height: 22px; font-size: 14px; }
   .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+
+  .sigpad { width: 100%; max-width: 600px; aspect-ratio: 3 / 1; display: block; background: #fff; border: 1px dashed var(--border);
+            border-radius: 10px; touch-action: none; cursor: crosshair; }
+  .row { display: flex; justify-content: space-between; align-items: center; max-width: 600px; margin-top: 6px; }
+  button.link { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 2px 4px; }
+  .pagebox { position: relative; margin-top: 14px; max-width: 420px; border: 1px solid var(--border); border-radius: 6px;
+             overflow: hidden; cursor: crosshair; background: #fff; }
+  .pagebox #pageImg { display: block; width: 100%; user-select: none; -webkit-user-drag: none; }
+  .sigoverlay { position: absolute; transform: translate(-50%, -50%); pointer-events: none; mix-blend-mode: multiply;
+                outline: 1.5px dashed var(--accent); outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -221,6 +231,69 @@
       </fieldset>
     </form>
 
+    <!-- sign -->
+    <form class="panel" onsubmit="return false" data-tool="sign">
+      <fieldset><legend>Your signature</legend>
+        <div class="chips">
+          <label><input type="radio" name="mode" value="draw" checked><span>Draw</span></label>
+          <label><input type="radio" name="mode" value="type"><span>Type</span></label>
+          <label><input type="radio" name="mode" value="image"><span>Upload image</span></label>
+        </div>
+        <div data-show="mode=draw" style="margin-top:12px">
+          <canvas id="sigPad" class="sigpad" width="600" height="200"></canvas>
+          <div class="row"><span class="hint" style="margin:0">Sign with your mouse, trackpad or finger.</span>
+            <button type="button" class="link" id="sigClear">Clear</button></div>
+        </div>
+        <div class="grid" data-show="mode=type" style="margin-top:12px">
+          <label class="f">Name<input name="text" id="sigText" placeholder="Your name" autocomplete="name"></label>
+          <label class="f">Style<select name="font" id="sigFont"></select></label>
+        </div>
+        <div data-show="mode=image" style="margin-top:12px">
+          <div class="grid">
+            <label class="f">Signature image<input type="file" id="sigFile" accept="image/*"></label>
+          </div>
+          <label class="check" style="margin-top:10px"><input type="checkbox" name="remove_background" checked> Remove paper background (for photos and scans)</label>
+          <label class="check" style="margin-top:6px"><input type="checkbox" name="recolor"> Recolour ink</label>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <label class="f">Ink colour<input type="color" name="color" id="sigColor" value="#1a237e"></label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Placement</legend>
+        <div class="grid">
+          <label class="f">Sign on
+            <select name="pages" id="sigPages"><option value="last">Last page</option><option value="first">First page</option>
+              <option value="all">Every page</option><option value="custom">Specific pages…</option></select></label>
+          <label class="f" data-show="pages=custom">Pages<input name="pages_custom" placeholder="e.g. 2, 5-6"></label>
+          <label class="f">Size <span class="out" data-for="width_pct" data-suffix="%"></span><input name="width_pct" id="sigSize" type="range" min="10" max="60" value="28"></label>
+          <label class="f">Caption under signature<input name="caption" placeholder="optional, e.g. Aaron Anish, Director"></label>
+        </div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" name="add_date" checked> Add today's date</label>
+        <input type="hidden" name="x" id="sigX" value="0.72"><input type="hidden" name="y" id="sigY" value="0.86">
+        <div class="pagebox" id="pageBox" hidden>
+          <img id="pageImg" alt="Page preview">
+          <img id="sigOverlay" class="sigoverlay" alt="">
+        </div>
+        <p class="hint" id="pageHint">Add a PDF to see a preview. Click on the page to place your signature.</p>
+        <p class="hint">This adds a visible signature image. It isn't a certificate-based digital signature.</p>
+      </fieldset>
+    </form>
+
+    <!-- extract images -->
+    <form class="panel" onsubmit="return false" data-tool="extract">
+      <fieldset><legend>Options</legend>
+        <div class="grid">
+          <label class="f">Which images
+            <select name="min_size"><option value="64" selected>Skip small icons (under 64px)</option><option value="0">Everything</option>
+              <option value="300">Only large images (300px+)</option></select></label>
+          <label class="f">Format
+            <select name="format"><option value="keep" selected>Original (best quality)</option><option value="png">PNG</option>
+              <option value="jpg">JPG</option><option value="webp">WEBP</option></select></label>
+        </div>
+        <p class="hint">Saves the images embedded in the PDF at their original resolution. Images used on several pages are saved once. To capture whole pages instead, use PDF → Other → PNG.</p>
+      </fieldset>
+    </form>
+
     <!-- compress -->
     <form class="panel" onsubmit="return false" data-tool="compress">
       <fieldset><legend>Compression</legend>
@@ -311,6 +384,10 @@ const TOOLS = [
     accepts: () => [".pdf"], drop: "Drop a PDF to customise" },
   { id: "ocr", title: "OCR", desc: "Text from scans & photos", endpoint: "ocr", btn: "Recognise text",
     accepts: () => [".pdf", ...F.images], drop: "Drop scanned PDFs or photos" },
+  { id: "sign", title: "Sign PDF", desc: "Draw, type or upload", endpoint: "sign", btn: "Sign PDF",
+    accepts: () => [".pdf"], drop: "Drop a PDF to sign", prepare: signPrepare },
+  { id: "extract", title: "Extract images", desc: "Pull images out of PDFs", endpoint: "extract-images", btn: "Extract images",
+    accepts: () => [".pdf"], drop: "Drop PDFs to extract images from" },
   { id: "compress", title: "Compress", desc: "Reduce file size", endpoint: "compress", btn: "Compress",
     accepts: () => [".pdf", ...F.images], drop: "Drop PDFs or images to shrink" },
   { id: "resize", title: "Resize images", desc: "By % or pixels", endpoint: "resize", btn: "Resize",
@@ -333,6 +410,7 @@ fetch("/api/formats").then(r => r.json()).then(f => {
   chips($("imgTargets"), [...f.image_formats, "svg"].map(x => [x, x.toUpperCase()]));
   document.querySelectorAll(".fmtSelect").forEach(s => s.innerHTML =
     `<option value="keep">Same as original</option>` + f.image_formats.filter(x => x !== "jpeg").map(x => `<option value="${x}">${x.toUpperCase()}</option>`).join(""));
+  $("sigFont").innerHTML = f.fonts.map(x => `<option value="${x.id}">${x.label}</option>`).join("");
   selectTool(tool.id);
 });
 
@@ -363,6 +441,7 @@ function render() {
        <button class="order" data-act="up" title="Move up">↑</button><button class="order" data-act="down" title="Move down">↓</button>
        <button data-act="rm" title="Remove">×</button></li>`).join("");
   $("go").disabled = !files.length;
+  updateSignPreview();
 }
 
 function addFiles(list) {
@@ -389,6 +468,7 @@ function refreshPanel() {
     const t = p.querySelector("[name=target]:checked")?.value;
     $("dpiBox").style.display = F.image_formats.includes(t) ? "" : "none";
   }
+  if (tool.id === "sign") updateSignPreview();
 }
 document.addEventListener("input", e => { if (e.target.closest(".panel")) refreshPanel(); });
 
@@ -396,6 +476,7 @@ function collect() {
   const opts = {}; let target;
   panel().querySelectorAll("[name]").forEach(el => {
     if (el.closest("[data-show]")?.style.display === "none") return;
+    if (el.type === "file") return;
     if (el.type === "radio") { if (!el.checked) return; }
     let v = el.type === "checkbox" ? el.checked : el.value;
     if (el.type === "number" || el.type === "range") { if (v === "") return; v = Number(v); }
@@ -403,6 +484,133 @@ function collect() {
   });
   if (tool.id === "to") target = "pdf";
   return { target, opts };
+}
+
+// --- signing: draw pad, typed preview, page preview with click-to-place
+const SIG_CSS_FONTS = { "segoe-script": "Segoe Script", "segoe-print": "Segoe Print", "ink-free": "Ink Free",
+                        "brush-script": "Brush Script MT", "freestyle": "Freestyle Script" };
+const pad = $("sigPad"), padCtx = pad.getContext("2d");
+let strokes = [], drawing = null;
+
+function padPoint(e) {
+  const r = pad.getBoundingClientRect();
+  return [(e.clientX - r.left) * pad.width / r.width, (e.clientY - r.top) * pad.height / r.height];
+}
+function paintStrokes(ctx, list, dx = 0, dy = 0) {
+  ctx.strokeStyle = $("sigColor").value; ctx.lineWidth = 3.5; ctx.lineCap = ctx.lineJoin = "round";
+  for (const s of list) {
+    ctx.beginPath(); ctx.moveTo(s[0][0] - dx, s[0][1] - dy);
+    for (const [x, y] of s.slice(1)) ctx.lineTo(x - dx, y - dy);
+    if (s.length === 1) ctx.lineTo(s[0][0] - dx + 0.1, s[0][1] - dy);  // a dot
+    ctx.stroke();
+  }
+}
+function redrawPad() { padCtx.clearRect(0, 0, pad.width, pad.height); paintStrokes(padCtx, strokes); drawOverlay(); }
+pad.addEventListener("pointerdown", e => { pad.setPointerCapture(e.pointerId); drawing = [padPoint(e)]; strokes.push(drawing); redrawPad(); });
+pad.addEventListener("pointermove", e => { if (drawing) { drawing.push(padPoint(e)); redrawPad(); } });
+["pointerup", "pointercancel"].forEach(ev => pad.addEventListener(ev, () => { drawing = null; }));
+$("sigColor").addEventListener("input", redrawPad);
+$("sigClear").onclick = () => { strokes = []; redrawPad(); };
+
+// the signature as a tightly-cropped canvas (matches what the server stamps)
+function signatureCanvas() {
+  const p = panel(), mode = p.querySelector("[name=mode]:checked").value;
+  if (mode === "draw") {
+    if (!strokes.length) return null;
+    const pts = strokes.flat(), pad2 = 6;
+    const x0 = Math.min(...pts.map(p => p[0])) - pad2, y0 = Math.min(...pts.map(p => p[1])) - pad2;
+    const w = Math.max(...pts.map(p => p[0])) - x0 + pad2, h = Math.max(...pts.map(p => p[1])) - y0 + pad2;
+    const c = Object.assign(document.createElement("canvas"), { width: Math.ceil(w), height: Math.ceil(h) });
+    paintStrokes(c.getContext("2d"), strokes, x0, y0);
+    return c;
+  }
+  if (mode === "type") {
+    const text = $("sigText").value.trim(); if (!text) return null;
+    const font = `120px "${SIG_CSS_FONTS[$("sigFont").value] || "cursive"}", cursive`;
+    const m = Object.assign(document.createElement("canvas")).getContext("2d"); m.font = font;
+    const mt = m.measureText(text);
+    const c = Object.assign(document.createElement("canvas"), {
+      width: Math.ceil(mt.actualBoundingBoxLeft + mt.actualBoundingBoxRight) + 20,
+      height: Math.ceil(mt.actualBoundingBoxAscent + mt.actualBoundingBoxDescent) + 20 });
+    const g = c.getContext("2d"); g.font = font; g.fillStyle = $("sigColor").value;
+    g.fillText(text, 10 + mt.actualBoundingBoxLeft, 10 + mt.actualBoundingBoxAscent);
+    return c;
+  }
+  return null;
+}
+
+let sigFileUrl = null;
+$("sigFile").onchange = () => {
+  if (sigFileUrl) URL.revokeObjectURL(sigFileUrl);
+  sigFileUrl = $("sigFile").files[0] ? URL.createObjectURL($("sigFile").files[0]) : null;
+  drawOverlay();
+};
+
+function drawOverlay() {
+  const ov = $("sigOverlay"), box = $("pageBox");
+  if (tool.id !== "sign" || box.hidden) return;
+  const mode = panel().querySelector("[name=mode]:checked").value;
+  const src = mode === "image" ? sigFileUrl : signatureCanvas()?.toDataURL();
+  if (!src) { ov.style.display = "none"; return; }
+  ov.onload = () => {
+    const bw = box.clientWidth, bh = box.clientHeight;
+    const w = bw * $("sigSize").value / 100, h = w * ov.naturalHeight / ov.naturalWidth;
+    // keep fully on the page, same as the server does
+    const cx = Math.min(Math.max(bw * $("sigX").value, w / 2), bw - w / 2);
+    const cy = Math.min(Math.max(bh * $("sigY").value, h / 2), bh - h / 2);
+    Object.assign(ov.style, { display: "block", width: w + "px", left: cx + "px", top: cy + "px" });
+  };
+  if (ov.src !== src) ov.src = src; else ov.onload();
+}
+
+let previewKey = null;
+async function updateSignPreview() {
+  if (tool.id !== "sign") return;
+  const f = files[0];
+  if (!f) { $("pageBox").hidden = true; $("pageHint").textContent = "Add a PDF to see a preview. Click on the page to place your signature."; previewKey = null; return; }
+  const sel = $("sigPages").value;
+  const page = sel === "last" ? 99999 : sel === "custom" ? (parseInt(panel().querySelector("[name=pages_custom]").value) || 1) : 1;
+  const key = `${f.name}|${f.size}|${f.lastModified}|${page}`;
+  if (key === previewKey) return drawOverlay();
+  previewKey = key;
+  const body = new FormData(); body.append("file", f); body.append("page", page);
+  const res = await fetch("/api/preview", { method: "POST", body });
+  if (key !== previewKey) return;  // a newer request superseded this one
+  if (!res.ok) { $("pageBox").hidden = true; $("pageHint").textContent = (await res.json().catch(() => ({}))).error || "Preview unavailable."; return; }
+  const count = res.headers.get("X-Page-Count");
+  $("pageImg").onload = () => { $("pageBox").hidden = false; drawOverlay(); };
+  $("pageImg").src = URL.createObjectURL(await res.blob());
+  const shown = Math.min(page, +count);
+  $("pageHint").textContent = `Previewing page ${shown} of ${count}. Click on the page to place your signature.`;
+}
+$("pageBox").addEventListener("click", e => {
+  const r = $("pageImg").getBoundingClientRect();
+  $("sigX").value = ((e.clientX - r.left) / r.width).toFixed(4);
+  $("sigY").value = ((e.clientY - r.top) / r.height).toFixed(4);
+  drawOverlay();
+});
+window.addEventListener("resize", drawOverlay);
+
+// called before upload: turn panel values into what /api/sign expects and attach the signature image
+async function signPrepare(body, opts) {
+  if (opts.pages === "custom") {
+    if (!opts.pages_custom?.trim()) throw new Error("Enter which pages to sign.");
+    opts.pages = opts.pages_custom;
+  }
+  delete opts.pages_custom;
+  opts.width = opts.width_pct / 100; delete opts.width_pct;
+  if (opts.mode === "draw") {
+    const c = signatureCanvas();
+    if (!c) throw new Error("Draw your signature first.");
+    body.append("signature", await new Promise(r => c.toBlob(r, "image/png")), "signature.png");
+    Object.assign(opts, { mode: "image", remove_background: false, recolor: false });
+  } else if (opts.mode === "image") {
+    const f = $("sigFile").files[0];
+    if (!f) throw new Error("Choose a signature image.");
+    body.append("signature", f, f.name);
+  } else if (!opts.text?.trim()) {
+    throw new Error("Type your name to create a signature.");
+  }
 }
 
 // --- events
@@ -436,10 +644,11 @@ $("go").onclick = async () => {
   const body = new FormData();
   files.forEach(f => body.append("files", f));
   if (target) body.append("target", target);
-  body.append("options", JSON.stringify(opts));
   $("go").disabled = true;
-  setStatus("Working… (large files and Office documents can take a few seconds)");
   try {
+    if (tool.prepare) await tool.prepare(body, opts);
+    body.append("options", JSON.stringify(opts));
+    setStatus("Working… (large files and Office documents can take a few seconds)");
     const res = await fetch("/api/" + tool.endpoint, { method: "POST", body });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
     const cd = res.headers.get("Content-Disposition") || "";
