@@ -184,3 +184,54 @@ def compress(src, out_dir, level="medium", grayscale=False):
     if os.path.getsize(out) >= os.path.getsize(src):
         shutil.copyfile(src, out)  # already optimal; don't make it bigger
     return out
+
+
+# ---------------------------------------------------------------- extract images
+
+RAW_OK = {"jpeg", "jpg", "png", "gif", "bmp", "tiff", "webp"}  # formats we can hand back untouched
+
+
+def extract_images(src, out_dir, min_size=64, fmt="keep", password=""):
+    """Save each embedded image once, at its original resolution. Images smaller than min_size px are skipped."""
+    outs, seen = [], set()
+    with _open(src, password) as doc:
+        for pno, page in enumerate(doc, 1):
+            for n, img in enumerate(page.get_images(full=True), 1):
+                xref, smask = img[0], img[1]
+                if xref in seen:
+                    continue  # same image used on several pages
+                seen.add(xref)
+                info = doc.extract_image(xref)
+                if not info or min(info["width"], info["height"]) < int(min_size or 0):
+                    continue
+                ext = "jpg" if info["ext"] == "jpeg" else info["ext"]
+                base = os.path.join(out_dir, f"{_stem(src)}_p{pno}_{n}")
+
+                if fmt == "keep" and not smask and ext in RAW_OK:
+                    with open(f"{base}.{ext}", "wb") as f:
+                        f.write(info["image"])
+                    outs.append(f"{base}.{ext}")
+                    continue
+
+                # needs re-encoding: transparency mask, CMYK/JPX/JBIG2 sources, or a chosen format
+                pix = pymupdf.Pixmap(doc, xref)
+                if smask:
+                    try:
+                        pix = pymupdf.Pixmap(pix, pymupdf.Pixmap(doc, smask))
+                    except Exception:
+                        pass  # mask doesn't match; keep the image without it
+                if pix.colorspace and pix.colorspace.n > 3:
+                    pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+                out_ext = "png" if fmt == "keep" else fmt
+                if out_ext in ("jpg", "jpeg") and pix.alpha:
+                    pix = pymupdf.Pixmap(pix, 0)  # JPEG has no alpha
+                path = f"{base}.{out_ext}"
+                if out_ext in ("png", "jpg", "jpeg"):
+                    pix.save(path)
+                else:
+                    pix.pil_save(path, format={"webp": "WEBP", "tiff": "TIFF"}.get(out_ext, out_ext.upper()))
+                outs.append(path)
+    if not outs:
+        raise UserError(f"No images found in {os.path.basename(src)}"
+                        + (f" (images under {min_size}px are skipped)." if min_size else "."))
+    return outs
