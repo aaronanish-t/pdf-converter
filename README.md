@@ -32,6 +32,11 @@ Open http://localhost:5000
 - **Compress** — light/balanced/strong; downsamples images and subsets fonts. Never returns a bigger file.
 - **OCR** — makes scanned PDFs and photos searchable (invisible text layer over the original) or extracts
   plain text. Uses [RapidOCR](https://github.com/RapidAI/RapidOCR), so no Tesseract install is needed.
+- **Sign** — draw, type (handwriting fonts) or upload a signature; click a page preview to place it.
+  Optional date and caption, last/first/every/specific pages, and paper-background removal for photographed
+  signatures. This is a visible signature, not a certificate-based digital signature.
+- **Extract images** — saves embedded images at original resolution (deduplicated, tiny icons skipped,
+  transparency kept), or converts them to PNG/JPG/WEBP
 - **Page setup** for →PDF conversions: A3/A4/A5/Letter/Legal, orientation, margins
 
 ## Image tools
@@ -55,3 +60,6 @@ and return the result file (a `.zip` when there are several outputs).
 | `POST /api/resize` | `{"mode": "percent", "percent": 50}` |
 | `POST /api/enhance` | `{"upscale": 2, "sharpen": 1}` |
 | `POST /api/ocr` | `{"output": "pdf" \| "txt", "dpi": 200, "skip_text_pages": true}` |
+| `POST /api/sign` | plus an optional `signature` image file; `{"mode": "image" \| "type", "text": "…", "pages": "last", "x": 0.7, "y": 0.85, "width": 0.28, "add_date": true}` |
+| `POST /api/extract-images` | `{"min_size": 64, "format": "keep" \| "png" \| "jpg" \| "webp"}` |
+| `POST /api/preview` | single `file` field plus `page`; returns a PNG of that page |
